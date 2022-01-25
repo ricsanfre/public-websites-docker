@@ -1,0 +1,146 @@
+version: "3.8"
+
+secrets:
+  config_json:
+    file: ~/foundry/secrets.json
+
+services:
+
+  # Securing docker.sock access
+  docker-proxy:
+    container_name: docker-proxy
+    environment:
+      CONTAINERS: 1
+    image: tecnativa/docker-socket-proxy
+    networks:
+      - internal
+    ports:
+      - 2375
+    volumes:
+      - "/var/run/docker.sock:/var/run/docker.sock:ro"
+
+  # Traefik front-end
+  traefik:
+    depends_on:
+      - docker-proxy
+    image: traefik:v2.0
+    container_name: traefik
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    networks:
+      - dmz
+      - internal
+    ports:
+      - 80:80
+      - 443:443
+    volumes:
+      - /etc/localtime:/etc/localtime:ro
+      - ./traefik/traefik.yml:/traefik.yml:ro
+      - ./traefik/acme.json:/acme.json
+      - ./traefik/access.log:/data/access.log
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.traefik.entrypoints=http"
+      - "traefik.http.routers.traefik.rule=Host(`$TRAEFIK_URL`)"
+      - "traefik.http.middlewares.traefik-auth.basicauth.users=$TRAEFIK_BASIC_AUTH_PASSWD"
+      - "traefik.http.middlewares.traefik-https-redirect.redirectscheme.scheme=https"
+      - "traefik.http.routers.traefik.middlewares=traefik-https-redirect"
+      - "traefik.http.routers.traefik-secure.entrypoints=https"
+      - "traefik.http.routers.traefik-secure.rule=Host(`$TRAEFIK_URL`)"
+      - "traefik.http.routers.traefik-secure.middlewares=traefik-auth"
+      - "traefik.http.routers.traefik-secure.tls=true"
+      - "traefik.http.routers.traefik-secure.tls.certresolver=http"
+      - "traefik.http.routers.traefik-secure.service=api@internal"
+
+  # Foundry VTT
+  foundryvtt:
+    depends_on:
+      - traefik
+    container_name: foundryvtt
+    image: felddy/foundryvtt:release
+    hostname: dndtools
+    networks:
+      - internal
+    init: true
+    restart: "unless-stopped"
+    volumes:
+      - type: bind
+        source: ~/foundry/data
+        target: /data
+    environment:
+      - CONTAINER_CACHE=/data/container_cache
+      - CONTAINER_PATCHES=/data/container_patches
+      - CONTAINER_PRESERVE_OWNER=/data/Data/my_assets
+      - FOUNDRY_PROXY_SSL=true
+    ports:
+      - target: 30000
+        protocol: tcp
+    secrets:
+      - source: config_json
+        target: config.json
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=dmz"
+      - "traefik.http.routers.foundryvtt.entrypoints=http"
+      - "traefik.http.routers.foundryvtt.rule=Host(`$FOUNDRY_URL`)"
+      - "traefik.http.middlewares.foundryvtt-https-redirect.redirectscheme.scheme=https"
+      - "traefik.http.routers.foundryvtt.middlewares=foundryvtt-https-redirect"
+      - "traefik.http.routers.foundryvtt-secure.entrypoints=https"
+      - "traefik.http.routers.foundryvtt-secure.rule=Host(`$FOUNDRY_URL`)"
+      - "traefik.http.routers.foundryvtt-secure.tls=true"
+      - "traefik.http.routers.foundryvtt-secure.tls.certresolver=http"
+      - "traefik.http.routers.foundryvtt-secure.service=foundryvtt"
+      - "traefik.http.services.foundryvtt.loadbalancer.server.port=30000"
+
+  ## Matomo Analytics
+  db:
+    image: mariadb
+    container_name: mariadb
+    networks:
+      - internal
+    command: --max-allowed-packet=64MB
+    restart: always
+    volumes:
+      - ./matomo/db:/var/lib/mysql
+    # environment:
+    #   - MYSQL_ROOT_PASSWORD=supers1cret0
+    env_file:
+      - ./matomo/db.env
+
+  matomo:
+    depends_on:
+      - db
+    image: matomo
+    container_name: matomo
+    restart: always
+    networks:
+      - internal
+    volumes:
+      - ./matomo/www-data:/var/www/html
+    environment:
+      - MATOMO_DATABASE_HOST=db
+    env_file:
+      - ./matomo/db.env
+    ports:
+      - target: 80
+        protocol: tcp
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=dmz"
+      - "traefik.http.routers.matomo.entrypoints=http"
+      - "traefik.http.routers.matomo.rule=Host(`$MATOMO_URL`)"
+      - "traefik.http.middlewares.matomo-https-redirect.redirectscheme.scheme=https"
+      - "traefik.http.routers.matomo.middlewares=matomo-https-redirect"
+      - "traefik.http.routers.matomo-secure.entrypoints=https"
+      - "traefik.http.routers.matomo-secure.rule=Host(`$MATOMO_URL`)"
+      - "traefik.http.routers.matomo-secure.tls=true"
+      - "traefik.http.routers.matomo-secure.tls.certresolver=http"
+      - "traefik.http.routers.matomo-secure.service=matomo"
+      - "traefik.http.services.matomo.loadbalancer.server.port=80"
+networks:
+  dmz:
+    external: true
+  internal:
+    external: true
+                                  
