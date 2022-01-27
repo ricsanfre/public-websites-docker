@@ -1,12 +1,35 @@
-# Publishing secured websites with Traefik and Let's encrypt using docker-compose
+# Selfhosting personal static websites powered by private web analytics and private comments platform
 
-How to configure a selfhosted server with internet access for publishig our websites using docker and Traefik as HTTP/HTTPS reverse Proxy.
+This project shows how to configure a selfhosted server with internet access for selfhosting our static websites/blogs (for example created with [Jekyll](https://jekyllrb.com/) along with dynamic web services providing the capabilities to enable comments within our static sites and to track the number of visitors or the most viewed pages in our website.
 
+This project enables to automatically deploy using Docker the following components:
+
+  - [Traefik](traefik.io) as HTTP/HTTPS reverse proxy. Traefik is the front-end for all backend web services
+  - [remark42](https://remark42.com/) as commenting platform for supporting comments in our posts
+  - [matomo](https://matomo.org/) as web analytics platform for tracking visitors in our websites.
+  - Personal static website, automatically generated with Jekyll and exposed by a static HTTP server like nginx or apache. As alternative personal websites can be hosted in third party static web hosting provider like Github Pages.
+
+**Why Docker**
 Docker, as container platform, enables the portability of the software between different hosting environments (bare metal, VM, etc.), so any kind of selfhosted platform can be used: a VM running on a Cloud Service Provider or a baremetal server with internet access like a Raspberry PI.
 
+**Why Traefik**
 For securing the access through HTTPS using SSL certificates, Traefik will be used.
 
-Traefik is a Docker-aware reverse proxy with a monitoring dashboard. Traefik also handles setting up your SSL certificates using Let’s Encrypt allowing you to securely serve everything over HTTPS. Docker-aware means that Traefik is able to discover docker containers and using labels assigned to those containers automatically configure the routing and SSL certificates to each service. See Traefik documentation about [docker provider](https://doc.traefik.io/traefik/providers/docker/) 
+Traefik is a Docker-aware reverse proxy with a monitoring dashboard. Traefik also handles setting up your SSL certificates using [Let’s Encrypt](https://letsencrypt.org/) allowing you to securely serve everything over HTTPS. Docker-aware means that Traefik is able to discover docker containers and using labels assigned to those containers automatically configure the routing and SSL certificates to each service. See Traefik documentation about [docker provider](https://doc.traefik.io/traefik/providers/docker/).
+
+**Why Matomo**
+Matomo is a selfhost alternative to Google Analytics service. It provides a better way to protect user's data privacy (user's data is not shared with any third party) and it can work in cookieless mode.
+
+**Why remark42**
+Remark is a seflhost alternative to other comments platforms (Disqus, Commento) that is free. It also provide a better way to protect user's data privacy and it enables social login (via Google, Twitter, Facebook, Microsoft, GitHub, Yandex, Patreon and Telegram) or post anonymous comments.
+
+## Requirements
+
+For selfhosting your websites you need:
+
+- DNS domain owned by you. Different DNS subdomains need to be assigned to each of the published web services (matomo, remark42, personal website)
+- Linux VM hosted in a Public Cloud Service Provider, with associated public IP address.
+- Linux VM or baremetal server hosted by you in your home network. In this case you will use the Public IP address assigned by your ISP.
 
 ## Enabling Internet Access
 
@@ -83,7 +106,6 @@ For example IONOS DNS provider provides the following [instructions](https://www
 
 Docker and docker compose need to be installed on the server.
 Ansible can be used to automatically deploy docker and docker compose on the server
-
 
 ### Create docker networks
 

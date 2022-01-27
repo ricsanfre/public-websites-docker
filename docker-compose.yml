@@ -53,6 +53,95 @@ services:
       - "traefik.http.routers.traefik-secure.tls.certresolver=http"
       - "traefik.http.routers.traefik-secure.service=api@internal"
 
+  ## Matomo Analytics
+  db:
+    image: mariadb
+    container_name: mariadb
+    networks:
+      - internal
+    command: --max-allowed-packet=64MB
+    restart: always
+    volumes:
+      - ./matomo/db:/var/lib/mysql
+    # environment:
+    #   - MYSQL_ROOT_PASSWORD=supers1cret0
+    env_file:
+      - ./matomo/db.env
+  matomo:
+    depends_on:
+      - db
+    image: matomo
+    container_name: matomo
+    restart: always
+    networks:
+      - internal
+    volumes:
+      - ./matomo/www-data:/var/www/html
+    environment:
+      - MATOMO_DATABASE_HOST=db
+    env_file:
+      - ./matomo/db.env
+    ports:
+      - target: 80
+        protocol: tcp
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=dmz"
+      - "traefik.http.routers.matomo.entrypoints=http"
+      - "traefik.http.routers.matomo.rule=Host(`$MATOMO_URL`)"
+      - "traefik.http.middlewares.matomo-https-redirect.redirectscheme.scheme=https"
+      - "traefik.http.routers.matomo.middlewares=matomo-https-redirect"
+      - "traefik.http.routers.matomo-secure.entrypoints=https"
+      - "traefik.http.routers.matomo-secure.rule=Host(`$MATOMO_URL`)"
+      - "traefik.http.routers.matomo-secure.tls=true"
+      - "traefik.http.routers.matomo-secure.tls.certresolver=http"
+      - "traefik.http.routers.matomo-secure.service=matomo"
+      - "traefik.http.services.matomo.loadbalancer.server.port=80"
+
+  ## Remark42
+  remark42:
+    image: umputun/remark42:latest
+    container_name: "remark42"
+    hostname: "remark42"
+    restart: always
+    networks:
+      - internal
+    volumes:
+      - ./remark42/var:/srv/var
+    ports:
+      - target: 80
+        protocol: tcp
+    env_file:
+      - ./remark42/remark42.env
+    environment:
+      - REMARK_URL
+      - SECRET
+      - STORE_BOLT_PATH=/srv/var/db
+      - BACKUP_PATH=/srv/var/backup
+      - DEBUG=true
+      - AUTH_GOOGLE_CID
+      - AUTH_GOOGLE_CSEC
+      - AUTH_GITHUB_CID
+      - AUTH_GITHUB_CSEC
+      - AUTH_FACEBOOK_CID
+      - AUTH_FACEBOOK_CSEC
+      - AUTH_DISQUS_CID
+      - AUTH_DISQUS_CSEC
+      # - ADMIN_PASSWD=password
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=dmz"
+      - "traefik.http.routers.remark42.entrypoints=http"
+      - "traefik.http.routers.remark42.rule=Host(`$REMARK42_URL`)"
+      - "traefik.http.middlewares.remark42-https-redirect.redirectscheme.scheme=https"
+      - "traefik.http.routers.remark42.middlewares=remark42-https-redirect"
+      - "traefik.http.routers.remark42-secure.entrypoints=https"
+      - "traefik.http.routers.remark42-secure.rule=Host(`$REMARK42_URL`)"
+      - "traefik.http.routers.remark42-secure.tls=true"
+      - "traefik.http.routers.remark42-secure.tls.certresolver=http"
+      - "traefik.http.routers.remark42-secure.service=remark42"
+      - "traefik.http.services.remark42.loadbalancer.server.port=80"
+
   # Foundry VTT
   foundryvtt:
     depends_on:
@@ -93,51 +182,6 @@ services:
       - "traefik.http.routers.foundryvtt-secure.service=foundryvtt"
       - "traefik.http.services.foundryvtt.loadbalancer.server.port=30000"
 
-  ## Matomo Analytics
-  db:
-    image: mariadb
-    container_name: mariadb
-    networks:
-      - internal
-    command: --max-allowed-packet=64MB
-    restart: always
-    volumes:
-      - ./matomo/db:/var/lib/mysql
-    # environment:
-    #   - MYSQL_ROOT_PASSWORD=supers1cret0
-    env_file:
-      - ./matomo/db.env
-
-  matomo:
-    depends_on:
-      - db
-    image: matomo
-    container_name: matomo
-    restart: always
-    networks:
-      - internal
-    volumes:
-      - ./matomo/www-data:/var/www/html
-    environment:
-      - MATOMO_DATABASE_HOST=db
-    env_file:
-      - ./matomo/db.env
-    ports:
-      - target: 80
-        protocol: tcp
-    labels:
-      - "traefik.enable=true"
-      - "traefik.docker.network=dmz"
-      - "traefik.http.routers.matomo.entrypoints=http"
-      - "traefik.http.routers.matomo.rule=Host(`$MATOMO_URL`)"
-      - "traefik.http.middlewares.matomo-https-redirect.redirectscheme.scheme=https"
-      - "traefik.http.routers.matomo.middlewares=matomo-https-redirect"
-      - "traefik.http.routers.matomo-secure.entrypoints=https"
-      - "traefik.http.routers.matomo-secure.rule=Host(`$MATOMO_URL`)"
-      - "traefik.http.routers.matomo-secure.tls=true"
-      - "traefik.http.routers.matomo-secure.tls.certresolver=http"
-      - "traefik.http.routers.matomo-secure.service=matomo"
-      - "traefik.http.services.matomo.loadbalancer.server.port=80"
 networks:
   dmz:
     external: true
