@@ -13,6 +13,7 @@ providers:
     endpoint: "tcp://docker-proxy:2375"
     watch: true
     exposedbydefault: false
+    network: backend
 
 accessLog:
   filePath: "/data/access.log"

@@ -10,24 +10,28 @@ This project enables to automatically deploy using Docker the following componen
   - Personal static website, automatically generated with Jekyll and exposed by a static HTTP server like nginx or apache. As alternative personal websites can be hosted in third party static web hosting provider like Github Pages.
 
 **Why Docker**
+
 Docker, as container platform, enables the portability of the software between different hosting environments (bare metal, VM, etc.), so any kind of selfhosted platform can be used: a VM running on a Cloud Service Provider or a baremetal server with internet access like a Raspberry PI.
 
 **Why Traefik**
+
 For securing the access through HTTPS using SSL certificates, Traefik will be used.
 
 Traefik is a Docker-aware reverse proxy with a monitoring dashboard. Traefik also handles setting up your SSL certificates using [Let’s Encrypt](https://letsencrypt.org/) allowing you to securely serve everything over HTTPS. Docker-aware means that Traefik is able to discover docker containers and using labels assigned to those containers automatically configure the routing and SSL certificates to each service. See Traefik documentation about [docker provider](https://doc.traefik.io/traefik/providers/docker/).
 
 **Why Matomo**
+
 Matomo is a selfhost alternative to Google Analytics service. It provides a better way to protect user's data privacy (user's data is not shared with any third party) and it can work in cookieless mode.
 
 **Why remark42**
+
 Remark is a seflhost alternative to other comments platforms (Disqus, Commento) that is free. It also provide a better way to protect user's data privacy and it enables social login (via Google, Twitter, Facebook, Microsoft, GitHub, Yandex, Patreon and Telegram) or post anonymous comments.
 
 ## Requirements
 
 For selfhosting your websites you need:
 
-- DNS domain owned by you. Different DNS subdomains need to be assigned to each of the published web services (matomo, remark42, personal website)
+- DNS domain owned by you. Different DNS subdomains need to be assigned to each of the published web services (matomo, remark42, personal website). Traefik rules will use the DNS domain information to route the HTTP/HTTPS traffic to the proper backend web service.
 - Linux VM hosted in a Public Cloud Service Provider, with associated public IP address.
 - Linux VM or baremetal server hosted by you in your home network. In this case you will use the Public IP address assigned by your ISP.
 
@@ -89,15 +93,21 @@ For example IONOS DNS provider provides the following [instructions](https://www
 
 - Step 1: Install python package
 
-    pip3 install domain-connect-dyndns
+  ```shell
+  pip3 install domain-connect-dyndns
+  ```
 
 - Step 2: Configure domain to be dynamically updated
 
-    domain-connect-dyndns setup --domain ricsanfre.com
+  ```shell
+  domain-connect-dyndns setup --domain <your-domain>
+  ```
 
 - Step 3: Update it
-
-    domain-connect-dyndns update --all
+  
+  ```shell
+  domain-connect-dyndns update --all
+  ```
 
 
 ## Docker configuration
@@ -109,20 +119,25 @@ Ansible can be used to automatically deploy docker and docker compose on the ser
 
 ### Create docker networks
 
-Create a couple of docker network to interconnect all docker containers
+Create a couple of docker network to interconnect all docker containers:
 
-  docker network create dmz
-  docker network create internal
+```shell
+docker network create frontend
+docker network create backend
+```
 
-containers accesing to `dmz` network are the only ones that are publishing ports on the hosted server. Since the host will have internet acces, those services will be accesible from Internet.
-containers accesing to `internal` network are not publishing any port on the hosted server and so they are not accesible directly form internet.
+Containers accesing to `frontend` network are the only ones that are exposing its ports to the host. Since the host will have internet acces, those exposed services will be accesible from Internet. Traefik container will be the only container to be attached to this network.
+
+Containers accesing to `backend` network are not exposing any port to the server and so they are not accesible directly form internet. All backend containers will be attached to this network.
 
 ## Configuring and running Traefik with Docker
 
+
+Traefik discovers automatically the routing configuration to be applied to each backend service, through the annotations specified in each of the backend containers (`labels` section in docker-compose file).
+
 ### Securing access to Docker API
 
-Traefik discovers automatically the configuration to be applied to docker containers, specified in labels. 
-For doing that Traefik requires access to the docker socket to get its dynamic configuration. As Traefik official [documentation](https://doc.traefik.io/traefik/providers/docker/#docker-api-access) states, "Accessing the Docker API without any restriction is a security concern: If Traefik is attacked, then the attacker might get access to the underlying host".
+For doing the automatic discovery of services, Traefik requires access to the docker socket to get its dynamic configuration. As Traefik official [documentation](https://doc.traefik.io/traefik/providers/docker/#docker-api-access) states, "Accessing the Docker API without any restriction is a security concern: If Traefik is attacked, then the attacker might get access to the underlying host".
 
 There are several mechanisms to secure the access to Docker API, one of them is the use of a docker proxy like the one provided by Tecnativa, [Tecnativa's Docker Socket Proxy](https://github.com/Tecnativa/docker-socket-proxy). Instead of allowing our publicly-facing Traefik container full access to the Docker socket file, we can instead proxy only the API calls we need with Tecnativa’s Docker Socket Proxy project. This ensures Docker’s socket file is never exposed to the public along with all the headaches doing so could cause an unknowing site owner.
 
@@ -138,14 +153,14 @@ services:
       CONTAINERS: 1
     image: tecnativa/docker-socket-proxy
     networks:
-      - web
+      - backend
     ports:
       - 2375
     volumes:
       - "/var/run/docker.sock:/var/run/docker.sock:ro"
 
 networks:
-  web:
+  backend:
     external: true
 
 ```
@@ -174,6 +189,7 @@ networks:
       endpoint: "tcp://docker-proxy:2375"
       watch: true
       exposedbydefault: false
+      network: backend
 
   certificatesResolvers:
     http:
@@ -188,40 +204,15 @@ networks:
 
   - Enables Traefik dashoard (`api.dashboard`= true)
   - Configure Traefik HTTP and HTTPS default ports as entry points (`entryPoints`)
-  - Configure Docker as provider (`providers.docker`). Instead of using docker socket file, it uses as endpoint the Socket Proxy
-  - Configure Traefik to automatically generate SSL certificates using Let's Encrypt. ACME protocol is configured to use http challenge.
+  - Configure Docker as provider (`providers.docker`). Instead of using docker socket file, it uses as `endpoint` the Socket Proxy. Do not expose the containers by default (`exposedbydefault`), unless specified at container level with a label (`traefik.enable=true`), and use `backend` network as default for communicating with all containers.
+  - Configure Traefik to automatically generate SSL certificates using Let's Encrypt (`certificatesResolvers`). ACME protocol is configured to use http challenge.
 
 - Create empty `acme.json` file used to store SSL certificates generated by Traefik.
 
     touch acme.json
     chmod 600 acme.json
 
-### Configuring basic authentication access to Traefik dashboard
-Traefik dashboard will be enabled. By default it does not provide any authentication mechanisms. Traefik HTTP basic authentication mechanims will be used.
-
-In case that the backend does not provide authentication/authorization functionality, Traefik can be configured to provide HTTP authentication mechanism (basic authentication, digest and forward authentication).
-
-Traefik's [Basic Auth Middleware](https://doc.traefik.io/traefik/middlewares/http/basicauth/) for providing basic auth HTTP authentication.
-
-User:hashed-passwords pairs needed by the middleware can be generated with `htpasswd` utility. The command to execute is:
-
-    htpasswd -nb <user> <passwd>
-
-`htpasswd` utility is part of `apache2-utils` package. In order to execute the command it can be installed with the command: `sudo apt install apache2-utils`
-
-As an alternative, docker image can be used and the command to generate the user:hashed-password pairs is:
-      
-```  
-docker run --rm -it --entrypoint /usr/local/apache2/bin/htpasswd httpd:alpine -nb user password
-```
-For example:
- 
-  htpasswd -nb admin secretpassword
-  admin:$apr1$3bVLXoBF$7rHNxHT2cLZLOr57lHBOv1
-
-
-### Add Traefik service to docker-compose.yml file
-
+- Add Traefik service to docker-compose.yml file
 
 ```yml
 services:
@@ -234,7 +225,111 @@ services:
     security_opt:
       - no-new-privileges:true
     networks:
-      - web
+      - frontend
+    ports:
+      - 80:80
+      - 443:443
+    volumes:
+      - /etc/localtime:/etc/localtime:ro
+      - ./traefik/traefik.yml:/traefik.yml:ro
+      - ./traefik/acme.json:/acme.json
+```
+
+### Annotating containers with Traefik rules
+
+Traefik discovers automatically the routing configuration to be applied to each backend service, through the annotations specified in each of the backend containers (`labels` section in docker-compose file).
+
+For example, to configure access to a backend service exposed at `myservice.domain.com` Traefik `router` rules must be specified to redirect the traffik to the proper container. Additionally routing modifiers (`middlewares`) can be used for redirecting HTTP to HTTPS traffic or to apply an authentication method.
+
+For each backend service exposed through Traefik, a couple of `router` rules can be specified (one for handling HTTP traffic and another for handling HTTPS)
+
+- Router for HTTP incoming traffic. Router rule name: will be the `<service_name>` where `service_name` is the associated service in the docker-compose file.
+   
+  - `traefik.http.routers.<service_name>.rule=Host(<service_domain>)`
+  - `traefik.http.routers.<service_name>.entrypoint=http`
+  - `traefik.http.routers.<service_name>.middlewares=<service_name>-https-redirect`
+  - `traefik.http.middlewares.<service_name>-https-redirect.redirectscheme.scheme=https`
+
+  Where <service_domain> specifies that the incoming traffic to that domain must be redirected to the container.
+
+  And the configured `middleware` redirect all HTTP incoming traffic to the HTTPS entry point, and so to the HTTPS router rule.
+   
+- Router for HTTPS incoming traffic. Router rule name: will be `<service_name>-secure` 
+  
+  - `traefik.http.routers.<service_name>-secure.rule=Host(<service_domain>)`
+  - `traefik.http.routers.<service_name>-secure.entrypoint=https`
+  - `traefik.http.routers.<service_name>-secure.tls=true`: Enabling TLS certificates generation
+  - `traefik.http.routers.<service_name>-secure>.tls.certresolver=http`: Issue the SSL certificate with the resolver specified in Traefik configuration (`traefik.yml`): Let's Encrypt (ACME protocol) with HTTP challenge.
+
+- Additionally we need to tell Traefik which port of the container is being used.
+
+  - `traefik.http.services.<service_name>.loadbalancer.server.port=<backend_port>`. Use container port <backend_port> to redirect all the traffic.
+  
+```yml
+...
+my_service:
+  labels:
+    # Explicitly tell Traefik to expose this container
+    - "traefik.enable=true"
+    # The domain the service will respond to
+    - "traefik.http.routers.whoami.rule=Host(`whoami.domain.com`)"
+    # Allow request only from the predefined entry point named "http"
+    - "traefik.http.routers.whoami.entrypoints=http"
+    # Redirect all incoming http traffic to HTTPS
+    - "traefik.http.routers.whoami.middlewares=whoami-https-redirect"
+    - "traefik.http.middlewares.whoami-https-redirect.redirectscheme.scheme=https"
+    # Domain used for secure routing configuration
+    - "traefik.http.routers.whoami-secure.rule=Host(`whoami.domain.com`)"
+    # Allow requests in the predefined entry point "https"
+    - `traefik.http.routers.whoami-secure.entrypoint=https`
+    # Enabling TLS certificates generation
+    - "traefik.http.routers.whoami-secure.tls=true"
+    # Use SSL certificate resolver specified in configuration (Lets Encrypt)
+    - "traefik.http.routers.whoami-secure.tls.certresolver=http`
+```
+
+### Configuring basic authentication access to Traefik dashboard
+
+Traefik dashboard will be enabled. By default it does not provide any authentication mechanisms. Traefik HTTP basic authentication mechanims will be used.
+
+In case that the backend does not provide authentication/authorization functionality, Traefik can be configured to provide HTTP authentication mechanism (basic authentication, digest and forward authentication).
+
+Traefik's [Basic Auth Middleware](https://doc.traefik.io/traefik/middlewares/http/basicauth/) for providing basic auth HTTP authentication.
+
+User:hashed-passwords pairs needed by the middleware can be generated with `htpasswd` utility. The command to execute is:
+
+```shell
+htpasswd -nb <user> <passwd>
+```
+
+`htpasswd` utility is part of `apache2-utils` package. In order to execute the command it can be installed with the command: `sudo apt install apache2-utils`
+
+As an alternative, docker image can be used and the command to generate the user:hashed-password pairs is:
+      
+```shell
+docker run --rm -it --entrypoint /usr/local/apache2/bin/htpasswd httpd:alpine -nb user password
+```
+For example:
+
+```shell
+htpasswd -nb admin secretpassword
+admin:$apr1$3bVLXoBF$7rHNxHT2cLZLOr57lHBOv1
+```
+
+### Add Traefik service to docker-compose.yml file
+
+```yml
+services:
+  traefik:
+    depends_on:
+      - dockerproxy
+    image: traefik:v2.0
+    container_name: traefik
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    networks:
+      - frontend
     ports:
       - 80:80
       - 443:443
@@ -258,14 +353,13 @@ services:
 ```
 
 Where:
-  - Replace `monitor.yourdomain.com` in `traefik.http.routers.traefik.rule` `traefik.http.routers.traefik-secure.rule` labels by your domain
+  - Replace `monitor.yourdomain.com` in `traefik.http.routers.traefik.rule` and `traefik.http.routers.traefik-secure.rule` labels by your domain
   - Replace htpasswd pair generated before in `traefik.http.middlewares.traefik-auth.basicauth.users` label. (NOTE: If te resulting string has any $ you will need to modify them to be $$ - this is because docker-compose uses $ to signify a variable. By adding $$ we still docker-compose that it’s actually a $ in the string and not a variable.) 
 
-This configuration will start Traefik service and enabling its dashboard at `monitor.yourdomain.com`. Enabling HTTPS, generating a TLS  and  redirecting all HTTP traffic to HTTPS.
+This configuration will start Traefik service and enabling its dashboard at `monitor.yourdomain.com`. Enabling HTTPS, generating a TLS and  redirecting all HTTP traffic to HTTPS.
 
 
 ## Configuring and running a public webservice (Example Foundry VTT)
-
 
 ### Create folders and basic Foundry VTT configuration files
 
@@ -321,7 +415,7 @@ secrets:
     image: felddy/foundryvtt:release
     hostname: dndtools
     networks:
-      - web
+      - backend
     init: true
     restart: "unless-stopped"
     volumes:
@@ -341,7 +435,6 @@ secrets:
         target: config.json
     labels:
       - "traefik.enable=true"
-      - "traefik.docker.network=dmz"
       - "traefik.http.routers.foundryvtt.entrypoints=http"
       - "traefik.http.routers.foundryvtt.rule=Host(`foundry.ricsanfre.com`)"
       - "traefik.http.middlewares.foundryvtt-https-redirect.redirectscheme.scheme=https"

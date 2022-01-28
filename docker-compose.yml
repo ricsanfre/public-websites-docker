@@ -13,7 +13,7 @@ services:
       CONTAINERS: 1
     image: tecnativa/docker-socket-proxy
     networks:
-      - internal
+      - backend
     ports:
       - 2375
     volumes:
@@ -29,8 +29,8 @@ services:
     security_opt:
       - no-new-privileges:true
     networks:
-      - dmz
-      - internal
+      - frontend
+      - backend
     ports:
       - 80:80
       - 443:443
@@ -58,7 +58,7 @@ services:
     image: mariadb
     container_name: mariadb
     networks:
-      - internal
+      - backend
     command: --max-allowed-packet=64MB
     restart: always
     volumes:
@@ -74,7 +74,7 @@ services:
     container_name: matomo
     restart: always
     networks:
-      - internal
+      - backend
     volumes:
       - ./matomo/www-data:/var/www/html
     environment:
@@ -86,7 +86,6 @@ services:
         protocol: tcp
     labels:
       - "traefik.enable=true"
-      - "traefik.docker.network=dmz"
       - "traefik.http.routers.matomo.entrypoints=http"
       - "traefik.http.routers.matomo.rule=Host(`$MATOMO_URL`)"
       - "traefik.http.middlewares.matomo-https-redirect.redirectscheme.scheme=https"
@@ -105,7 +104,7 @@ services:
     hostname: "remark42"
     restart: always
     networks:
-      - internal
+      - backend
     volumes:
       - ./remark42/var:/srv/var
     ports:
@@ -130,7 +129,6 @@ services:
       # - ADMIN_PASSWD=password
     labels:
       - "traefik.enable=true"
-      - "traefik.docker.network=dmz"
       - "traefik.http.routers.remark42.entrypoints=http"
       - "traefik.http.routers.remark42.rule=Host(`$REMARK42_URL`)"
       - "traefik.http.middlewares.remark42-https-redirect.redirectscheme.scheme=https"
@@ -150,7 +148,7 @@ services:
     image: felddy/foundryvtt:release
     hostname: dndtools
     networks:
-      - internal
+      - backend
     init: true
     restart: "unless-stopped"
     volumes:
@@ -183,8 +181,8 @@ services:
       - "traefik.http.services.foundryvtt.loadbalancer.server.port=30000"
 
 networks:
-  dmz:
+  frontend:
     external: true
-  internal:
+  backend:
     external: true
                                   
