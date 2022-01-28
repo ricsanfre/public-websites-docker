@@ -113,20 +113,8 @@ services:
     env_file:
       - ./remark42/remark42.env
     environment:
-      - REMARK_URL
-      - SECRET
-      - STORE_BOLT_PATH=/srv/var/db
-      - BACKUP_PATH=/srv/var/backup
-      - DEBUG=true
-      - AUTH_GOOGLE_CID
-      - AUTH_GOOGLE_CSEC
-      - AUTH_GITHUB_CID
-      - AUTH_GITHUB_CSEC
-      - AUTH_FACEBOOK_CID
-      - AUTH_FACEBOOK_CSEC
-      - AUTH_DISQUS_CID
-      - AUTH_DISQUS_CSEC
-      # - ADMIN_PASSWD=password
+      - APP_UID=1000  # runs Remark42 app with non-default UID
+      - TIME_ZONE=Europe/Madrid
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.remark42.entrypoints=http"
