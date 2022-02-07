@@ -109,7 +109,6 @@ For example IONOS DNS provider provides the following [instructions](https://www
   domain-connect-dyndns update --all
   ```
 
-
 ## Docker configuration
 
 ### Installing docker and docker-compose
@@ -354,12 +353,162 @@ services:
 
 Where:
   - Replace `monitor.yourdomain.com` in `traefik.http.routers.traefik.rule` and `traefik.http.routers.traefik-secure.rule` labels by your domain
-  - Replace htpasswd pair generated before in `traefik.http.middlewares.traefik-auth.basicauth.users` label. (NOTE: If te resulting string has any $ you will need to modify them to be $$ - this is because docker-compose uses $ to signify a variable. By adding $$ we still docker-compose that it’s actually a $ in the string and not a variable.) 
+  - Replace htpasswd pair generated before in `traefik.http.middlewares.traefik-auth.basicauth.users` label. 
+    > NOTE: If te resulting string has any `$` you will need to modify them to be `$$` - this is because docker-compose uses `$` to signify a variable. By adding `$$` we still docker-compose that it’s actually a `$` in the string and not a variable.) 
 
 This configuration will start Traefik service and enabling its dashboard at `monitor.yourdomain.com`. Enabling HTTPS, generating a TLS and  redirecting all HTTP traffic to HTTPS.
 
+## Configuring and running web analytics service (Matomo) behind Traefik
 
-## Configuring and running a public webservice (Example Foundry VTT)
+Matomo service is composed of two containers: 
+1) SQL database (MariaDB) 
+2) Apache-based PHP website
+
+- Step 1: Create matomo directories within User's home directory
+
+    mkdir  ~/matomo
+    mkdir -p ~/matomo/db
+    mkdir -p ~/matomo/www-data
+
+  `matomo/db` is a host directory to be used as docker bind mount for storing MariaDB's data
+  `matomo/www-data` is a host directory to be used as docker bind mount for storing Matomo's website
+
+- Step 2: Create environment file
+ 
+  This file will contain environment variables for the two containers
+
+  `~/matomo/db.env`
+  ```
+  MYSQL_ROOT_PASSWORD=<mysql_root_user_password>
+  MYSQL_DATABASE=matomo
+  MYSQL_USER=matomo
+  MYSQL_PASSWORD=<matomo_user_password>
+  MATOMO_DATABASE_ADAPTER=mysql
+  MATOMO_DATABASE_TABLES_PREFIX=matomo_
+  MATOMO_DATABASE_USERNAME=matomo
+  MATOMO_DATABASE_PASSWORD=<matomo_user_password>
+  MATOMO_DATABASE_DBNAME=matomo
+  ```
+  This environment files contains MariaDB root user credentials `MYSQL_ROOT_PASSWORD` and the database name (`matomo`) and the user (`matomo`) credentials to be used by Matomo.
+
+- Step 3: Add MariaDB service to docker-compose.yml file
+
+  ```yml
+  db:
+    image: mariadb
+    container_name: mariadb
+    networks:
+      - backend
+    command: --max-allowed-packet=64MB
+    restart: always
+    volumes:
+      - ./matomo/db:/var/lib/mysql
+    env_file:
+      - ./matomo/db.env
+  ```
+  > NOTE: MariaDB container connected only to `backend` docker network. Host's matomo/db directory is mounted as MariaDB data base direcoty `/var/lib/mysql` 
+
+- Step 4: Add annotated Matomo container to docker-compose.yml file
+
+  ```yml
+  matomo:
+    depends_on:
+      - db
+    image: matomo
+    container_name: matomo
+    restart: always
+    networks:
+      - backend
+    volumes:
+      - ./matomo/www-data:/var/www/html
+    environment:
+      - MATOMO_DATABASE_HOST=db
+    env_file:
+      - ./matomo/db.env
+    ports:
+      - target: 80
+        protocol: tcp
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.matomo.entrypoints=http"
+      - "traefik.http.routers.matomo.rule=Host(`matomo.yourdomain.com`)"
+      - "traefik.http.middlewares.matomo-https-redirect.redirectscheme.scheme=https"
+      - "traefik.http.routers.matomo.middlewares=matomo-https-redirect"
+      - "traefik.http.routers.matomo-secure.entrypoints=https"
+      - "traefik.http.routers.matomo-secure.rule=Host(`matomo.yourdoamin.com`)"
+      - "traefik.http.routers.matomo-secure.tls=true"
+      - "traefik.http.routers.matomo-secure.tls.certresolver=http"
+      - "traefik.http.routers.matomo-secure.service=matomo"
+      - "traefik.http.services.matomo.loadbalancer.server.port=80"
+  ```
+  > NOTE: matomo container connected only to `backend` docker network. Host's matomo/www directory is mounted as Apaches's website directory `/var/www/html.
+  >
+  > Container annotated to be discovered by Traefik, exposing container tcp port 80, and creating the Traefik's rules to route the incoming traffic to Matomo's URL (`matomo.yourdomain.com`)
+
+- Step 5: Finishing Matomo installation
+
+  In order to finalize Matomo installation, Apache web server running on `matomo.yourdomain.com` need to be accesed and the procedure described in the [official documentation](https://matomo.org/docs/installation/) must be followed.
+
+  For doing so you need to run the containers with the commad:
+
+  ```shell
+  docker-compose up -d
+  ```
+
+## Configuring and running comments platform (remark42) behind Traefik
+
+- Step 1: Create remark42 directories within User's home directory
+
+    mkdir  ~/remark42
+    mkdir -p ~/remark42/var
+
+  `remartk/var` is a host directory to be used as docker bind mount for storing remark42's data
+  
+- Step 2: Create environment file
+ 
+  This file will contain environment variables for remark42 container
+
+  `~/remark42/remark42.env`
+
+  ```
+  REMARK_URL=http://remark42.yourdoamin.com
+  SECRET=<remark42_secret>
+  STORE_BOLT_PATH=/srv/var/db
+  BACKUP_PATH=/srv/var/backup
+  SITE=<site_id>
+  AUTH_ANON=true
+  ```
+
+  Where:
+  - `site_id`: identifies the list of sites (`,` separated) which remark42 is storing the comments for.
+     It must be the same `site_id` in the java script code added to your website. See [remark42 installation documentation](https://remark42.com/docs/getting-started/installation/)
+
+  > NOTE: In this case only anonymous comments are being enabled. Other environment variables enables non-anonymous comments and integration of the authorization with external platforms Github, Google, etc.
+
+## Configuring and running your static website (remark42) behind Traefik using Matomo and Remark42 services
+
+Jekyll can be used for creating your static website.
+
+As a quick example:
+
+- Step 1: Create a new jekyll site using default theme (`minima`)
+
+  In $HOME directory execute
+  ```shell
+  jekyll new mywebsite
+  ```
+  
+  
+
+
+### How to deploy the static site in Docker
+A simple Apache docker image can be used and the complete static site generated by Jekyll (`_site` directory) can mounted in the docker container as bind mount of /var/www-html
+
+
+
+
+
+## Configuring and running other public webservice (Example Foundry VTT)
 
 ### Create folders and basic Foundry VTT configuration files
 
@@ -457,3 +606,51 @@ Docker image is started using two environment variables:
 - `CONTAINER_PRESERVE_OWNER=/data/Data/my_assets`: Avoid changing of permissions of the assets folders
 
 
+## Docker-compose commands to create/start/stop the containers
+
+All commands need to be executed in $HOME directory, where docker-compose.yml file is located
+
+### Creating containers and starting the services
+
+```shell
+docker-compose up -d
+```
+
+### Stopping the containers
+
+To stop all the services
+```shell
+docker-compose stop
+```
+
+To stop just one of the services
+
+```shell
+docker-compose stop <service_name>
+```
+
+### Starting the containers
+
+To start all the services
+```shell
+docker-compose start
+```
+
+To start just one of the services
+
+```shell
+docker-compose start <service_name>
+```
+
+### Deleting the containers
+
+```shell
+docker-compose down
+```
+> NOTE: Since all data is stored in local host (using docker bind mounts), this command will not loose any important data.
+
+### Check logs of one container
+
+```shell
+docker-compose logs -f <docker_service_name>
+```
