@@ -1,9 +1,5 @@
 version: "3.8"
 
-secrets:
-  config_json:
-    file: ~/foundry/secrets.json
-
 services:
 
   # Securing docker.sock access
@@ -128,45 +124,33 @@ services:
       - "traefik.http.routers.remark42-secure.service=remark42"
       - "traefik.http.services.remark42.loadbalancer.server.port=80"
 
-  # Foundry VTT
-  foundryvtt:
+  # MyWebsite
+  mywebsite:
     depends_on:
       - traefik
-    container_name: foundryvtt
-    image: felddy/foundryvtt:release
-    hostname: dndtools
+    image: httpd:2.4-alpine
+    container_name: "mywebsite"
+    hostname: "mywebsite"
+    restart: always
     networks:
       - backend
-    init: true
-    restart: "unless-stopped"
     volumes:
-      - type: bind
-        source: ~/foundry/data
-        target: /data
-    environment:
-      - CONTAINER_CACHE=/data/container_cache
-      - CONTAINER_PATCHES=/data/container_patches
-      - CONTAINER_PRESERVE_OWNER=/data/Data/my_assets
-      - FOUNDRY_PROXY_SSL=true
+      - ./mywebsite/_site:/usr/local/apache2/htdocs/
     ports:
-      - target: 30000
+      - target: 80
         protocol: tcp
-    secrets:
-      - source: config_json
-        target: config.json
     labels:
       - "traefik.enable=true"
-      - "traefik.docker.network=dmz"
-      - "traefik.http.routers.foundryvtt.entrypoints=http"
-      - "traefik.http.routers.foundryvtt.rule=Host(`$FOUNDRY_URL`)"
-      - "traefik.http.middlewares.foundryvtt-https-redirect.redirectscheme.scheme=https"
-      - "traefik.http.routers.foundryvtt.middlewares=foundryvtt-https-redirect"
-      - "traefik.http.routers.foundryvtt-secure.entrypoints=https"
-      - "traefik.http.routers.foundryvtt-secure.rule=Host(`$FOUNDRY_URL`)"
-      - "traefik.http.routers.foundryvtt-secure.tls=true"
-      - "traefik.http.routers.foundryvtt-secure.tls.certresolver=http"
-      - "traefik.http.routers.foundryvtt-secure.service=foundryvtt"
-      - "traefik.http.services.foundryvtt.loadbalancer.server.port=30000"
+      - "traefik.http.routers.mywebsite.entrypoints=http"
+      - "traefik.http.routers.mywebsite.rule=Host(`$MYWEBSITE_URL`)"
+      - "traefik.http.middlewares.mywebsite-https-redirect.redirectscheme.scheme=https"
+      - "traefik.http.routers.mywebsite.middlewares=mywebsite-https-redirect"
+      - "traefik.http.routers.mywebsite-secure.entrypoints=https"
+      - "traefik.http.routers.mywebsite-secure.rule=Host(`$MYWEBSITE_URL`)"
+      - "traefik.http.routers.mywebsite-secure.tls=true"
+      - "traefik.http.routers.mywebsite-secure.tls.certresolver=http"
+      - "traefik.http.routers.mywebsite-secure.service=mywebsite"
+      - "traefik.http.services.mywebsite.loadbalancer.server.port=80"
 
 networks:
   frontend:
