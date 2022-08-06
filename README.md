@@ -644,7 +644,7 @@ A simple Apache docker image (`httpd`) can be used and the complete static site 
   > Container is annotated so it can be routed by Traefik.
 
 
-## Docker-compose commands to create/start/stop the containers
+## Docker-compose commands to create/start/stop/upgrade the containers
 
 All commands need to be executed in $HOME directory, where docker-compose.yml file is located
 
@@ -692,3 +692,21 @@ docker-compose down
 ```shell
 docker-compose logs -f <docker_service_name>
 ```
+
+### Updating your docker images ##
+
+This procedure indicates how to upgrade docker images of any of the services (matomo, remark42, etc.)
+
+Updating with Docker Compose
+
+1. Pull the new image from Docker Hub:
+
+    ```shell
+    docker-compose pull <docker_service_name>
+    ```
+
+1. Recreate the running container:
+
+    ```shell
+    docker-compose up --detach <docker_service_name>
+    ```
