@@ -522,9 +522,13 @@ Matomo service is composed of two containers:
       - "traefik.http.middlewares.remark42.headers.accesscontrolalloworiginlist=*"
   ```
 
-  > NOTE: [Traefik middleware cors headers](https://doc.traefik.io/traefik/middlewares/http/headers/#cors-headers) must be used to avoid CORS issues with remark42.
-
-    `traefik.http.middlewares.remark42.headers.accesscontrolalloworiginlist=*` to allow request from all orginins.
+  > NOTE: remark42 container connected only to `backend` docker network. Host's remark42/var directory is mounted as remark42's var directory  `/srv/var`.
+  >
+  > Container annotated to be discovered by Traefik, exposing container tcp port 80, and creating the Traefik's rules to route the incoming traffic to Remark42's URL (`remark42.yourdomain.com`).
+  >
+  > [Traefik middleware cors headers](https://doc.traefik.io/traefik/middlewares/http/headers/#cors-headers) must be used to avoid CORS issues with remark42.
+  >
+  >  `traefik.http.middlewares.remark42.headers.accesscontrolalloworiginlist=*` to allow request from all orginins.
 
 ## Configuring and running your static website behind Traefik using Matomo and Remark42 services
 
