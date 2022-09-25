@@ -218,7 +218,7 @@ services:
   traefik:
     depends_on:
       - dockerproxy
-    image: traefik:v2.0
+    image: traefik
     container_name: traefik
     restart: unless-stopped
     security_opt:
@@ -322,7 +322,7 @@ services:
   traefik:
     depends_on:
       - dockerproxy
-    image: traefik:v2.0
+    image: traefik
     container_name: traefik
     restart: unless-stopped
     security_opt:
@@ -481,9 +481,54 @@ Matomo service is composed of two containers:
 
   Where:
   - `site_id`: identifies the list of sites (`,` separated) which remark42 is storing the comments for.
-     It must be the same `site_id` in the java script code added to your website. See [remark42 installation documentation](https://remark42.com/docs/getting-started/installation/)
+    
+    It must be the same `site_id` in the java script code added to your website. See [remark42 installation documentation](https://remark42.com/docs/getting-started/installation/)
 
   > NOTE: In this case only anonymous comments are being enabled. Other environment variables enables non-anonymous comments and integration of the authorization with external platforms Github, Google, etc.
+
+- Step 3: Add annotated remark42 container to docker-compose.yml file
+
+  ```yml
+  ## Remark42
+  remark42:
+    image: umputun/remark42:latest
+    container_name: "remark42"
+    hostname: "remark42"
+    restart: always
+    networks:
+      - backend
+    volumes:
+      - ./remark42/var:/srv/var
+    ports:
+      - target: 80
+        protocol: tcp
+    env_file:
+      - ./remark42/remark42.env
+    environment:
+      - APP_UID=1000  # runs Remark42 app with non-default UID
+      - TIME_ZONE=Europe/Madrid
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.remark42.entrypoints=http"
+      - "traefik.http.routers.remark42.rule=Host(`remark42.yourdoamin.com`)"
+      - "traefik.http.middlewares.remark42-https-redirect.redirectscheme.scheme=https"
+      - "traefik.http.routers.remark42.middlewares=remark42-https-redirect"
+      - "traefik.http.routers.remark42-secure.entrypoints=https"
+      - "traefik.http.routers.remark42-secure.rule=Host(`remark42.yourdoamin.com`)"
+      - "traefik.http.routers.remark42-secure.tls=true"
+      - "traefik.http.routers.remark42-secure.tls.certresolver=http"
+      - "traefik.http.routers.remark42-secure.service=remark42"
+      - "traefik.http.services.remark42.loadbalancer.server.port=80"
+      - "traefik.http.middlewares.remark42.headers.accesscontrolalloworiginlist=*"
+  ```
+
+  > NOTE: remark42 container connected only to `backend` docker network. Host's remark42/var directory is mounted as remark42's var directory  `/srv/var`.
+  >
+  > Container annotated to be discovered by Traefik, exposing container tcp port 80, and creating the Traefik's rules to route the incoming traffic to Remark42's URL (`remark42.yourdomain.com`).
+  >
+  > [Traefik middleware cors headers](https://doc.traefik.io/traefik/middlewares/http/headers/#cors-headers) must be used to avoid CORS issues with remark42.
+  >
+  >  `traefik.http.middlewares.remark42.headers.accesscontrolalloworiginlist=*` to allow request from all orginins.
 
 ## Configuring and running your static website behind Traefik using Matomo and Remark42 services
 
@@ -643,6 +688,30 @@ A simple Apache docker image (`httpd`) can be used and the complete static site 
   > 
   > Container is annotated so it can be routed by Traefik.
 
+
+## Backup
+
+### Remark42 
+
+Remark42 by default makes daily backup files in `~/remark42/var/backup`
+
+This directory must be backed up daily
+
+### Matomo
+
+- Matomo website
+  Backup `~/matomo/www-data` directory
+- Matomo's MySQL database
+  To perform Matomo's MySQl database backup use the provided script `matomo_mysql_backup.sh`
+
+  This script exexutes a mysql dump command storing the result in compressed format in `~/matomo/backup/`
+  This script must be executed daily and backup directory backed up daily.
+
+### Backup documents references
+
+- [Remark42 automatic and manual backup](https://remark42.com/docs/backup/backup/)
+- [Matomo backup best practices](https://matomo.org/faq/on-premise/what-are-the-requirements-and-recommendations-for-matomo-backup/)
+- [Matomo MySQL backup how to](https://matomo.org/faq/how-to/how-do-i-backup-and-restore-the-matomo-data/)
 
 ## Docker-compose commands to create/start/stop/upgrade the containers
 
