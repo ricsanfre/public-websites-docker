@@ -644,6 +644,34 @@ A simple Apache docker image (`httpd`) can be used and the complete static site 
   > Container is annotated so it can be routed by Traefik.
 
 
+## Backup
+
+### Remark42
+
+Remark42 by default makes daily backup files in `~/remark42/var/backup`
+
+This directory must be backed up daily
+
+### Matomo
+
+- Matomo website
+
+  Backup `~/matomo/www-data` directory
+
+- Matomo's MySQL database
+
+  To perform Matomo's MySQl database backup use the provided script `matomo_mysql_backup.sh`
+
+  This script exexutes a mysql dump command storing the result in compressed format in `~/matomo/backup/`
+  This script must be executed daily and backup directory backed up daily.
+
+
+### Backup documents references
+
+- [Remark42 automatic and manual backup](https://remark42.com/docs/backup/backup/)
+- [Matomo backup best practices](https://matomo.org/faq/on-premise/what-are-the-requirements-and-recommendations-for-matomo-backup/)
+- [Matomo MySQL backup how to](https://matomo.org/faq/how-to/how-do-i-backup-and-restore-the-matomo-data/)
+
 ## Docker-compose commands to create/start/stop/upgrade the containers
 
 All commands need to be executed in $HOME directory, where docker-compose.yml file is located
