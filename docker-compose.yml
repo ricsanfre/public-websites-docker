@@ -123,7 +123,7 @@ services:
       - "traefik.http.routers.remark42-secure.tls.certresolver=http"
       - "traefik.http.routers.remark42-secure.service=remark42"
       - "traefik.http.services.remark42.loadbalancer.server.port=80"
-
+      - "traefik.http.middlewares.remark42.headers.accesscontrolalloworiginlist=*"
 
   # MyWebsite
   mywebsite:
@@ -152,7 +152,6 @@ services:
       - "traefik.http.routers.mywebsite-secure.tls.certresolver=http"
       - "traefik.http.routers.mywebsite-secure.service=mywebsite"
       - "traefik.http.services.mywebsite.loadbalancer.server.port=80"
-      - "traefik.http.middlewares.remark42-headers.headers.accesscontrolalloworiginlist=*"
 
 networks:
   frontend:
