@@ -218,7 +218,7 @@ services:
   traefik:
     depends_on:
       - dockerproxy
-    image: traefik:v2.0
+    image: traefik
     container_name: traefik
     restart: unless-stopped
     security_opt:
@@ -322,7 +322,7 @@ services:
   traefik:
     depends_on:
       - dockerproxy
-    image: traefik:v2.0
+    image: traefik
     container_name: traefik
     restart: unless-stopped
     security_opt:
